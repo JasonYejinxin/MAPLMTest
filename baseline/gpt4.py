@@ -1,10 +1,23 @@
+# import base64
+# import json
+# import openai
+# import os
+
+# import time
+# openai.api_key = "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"
+# response = openai.Completion.create(
+#     model="text-davinci-003",
+#     system_prompt = "You are a helpful language and vision assistant for traffic, driving and map scene. " + "You are able to understand the visual content that the user provides, " + "and assist the user with a variety of tasks using natural language to interpret attributes in images or point clouds. " + "You only answer from the options for each question and do not generate any reasoning. If you don't know the answer, just radomly select one.",
+#     max_tokens=5
+# )
+# print(response)
+
 import base64
 import json
 from openai import OpenAI
 import os
 
 import time
-
 client = OpenAI()
 
 def encode_image(image_path):

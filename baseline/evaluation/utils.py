@@ -14,6 +14,17 @@ def load_data(args):
     return problems, frame_ids
 
 
+def load_data_trainOnly(args):
+    problems = json.load(open(os.path.join(args.data_root, 'problems.json'), 'r'))
+    pid_splits = json.load(open(os.path.join(args.data_root, 'pid_splits.json'), 'r'))
+
+    frame_ids = pid_splits[args.train_split]
+    frame_ids = frame_ids[:args.train_number] if args.train_number > 0 else frame_ids
+    print(f'Number of train frames: {len(frame_ids)}\n')
+
+    return problems, frame_ids
+
+
 def load_data_gpt(args):
     problems = json.load(open(os.path.join(args.data_root, 'problems.json'), 'r'))
     pid_splits = json.load(open(os.path.join(args.data_root, 'pid_splits_gpt.json'), 'r'))

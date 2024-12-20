@@ -16,7 +16,7 @@ from PIL import Image
 from io import BytesIO
 from transformers import TextStreamer
 
-
+#把参数图片导入，转换成rgb
 def load_image(image_file):
     if image_file.startswith('http') or image_file.startswith('https'):
         response = requests.get(image_file)
@@ -28,9 +28,11 @@ def load_image(image_file):
 
 def main(args):
     # Model
+    #好像都要写的
     disable_torch_init()
-
+    #导入model
     model_name = get_model_name_from_path(args.model_path)
+    #需要的参数：token器，model，图像处理器，不认识
     tokenizer, model, image_processor, context_len = load_pretrained_model(args.model_path, args.model_base, model_name)
     # tokenizer, model, image_processor, context_len = load_pretrained_model(args.model_path, args.model_base, model_name, args.load_8bit, args.load_4bit)
 
