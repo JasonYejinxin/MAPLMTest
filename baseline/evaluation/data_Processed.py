@@ -1,122 +1,101 @@
-from transformers import T5Tokenizer, T5ForConditionalGeneration
-from transformers import ViTFeatureExtractor, ViTModel
-import torch
-from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
 import os
+import json
+import torch
 from PIL import Image
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+from transformers import BlipProcessor, BlipForConditionalGeneration
+from torch.utils.data import Dataset, DataLoader
 
-# 1. 加载模型和预训练的特征提取器
-vit_model_name = "google/vit-base-patch16-224-in21k"  # 或使用更大的模型
-flan_t5_model_name = "Salesforce/blip2-flan-t5-xl"  # FLAN-T5-XL模型
+# 数据路径
+image_folder = "/path/to/images"  # 图片主文件夹路径
+qa_json_path = "/path/to/qa.json"  # 文本问答路径
+output_dir = "/path/to/output_dir"  # 模型保存路径
 
-# 加载ViT模型和提取器
-feature_extractor = ViTFeatureExtractor.from_pretrained(vit_model_name)
-vit_model = ViTModel.from_pretrained(vit_model_name)
+# 加载文本问答数据
+with open(qa_json_path, "r") as f:
+    qa_data = json.load(f)  # 假设这是一个列表，每个元素是{"answer": "...", "frame": "...", "question": "..."}
 
-# 加载FLAN-T5-XL模型和Tokenizer
-t5_tokenizer = T5Tokenizer.from_pretrained(flan_t5_model_name)
-t5_model = T5ForConditionalGeneration.from_pretrained(flan_t5_model_name)
+# 加载 BLIP2 的特征提取器
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+blip_processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl").to(device)
 
-# 2. 自定义Dataset类，处理图像和问答数据
+# 加载 T5 模型
+tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xl")
+t5_model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-xl").to(device)
+
+# 数据集类
 class ImageTextDataset(Dataset):
-    def __init__(self, data_folder, tokenizer, feature_extractor):
-        self.data_folder = data_folder
+    def __init__(self, image_folder, qa_data, processor, tokenizer):
+        self.image_folder = image_folder
+        self.qa_data = qa_data
+        self.processor = processor
         self.tokenizer = tokenizer
-        self.feature_extractor = feature_extractor
-        self.data = self._load_data()
-
-    def _load_data(self):
-        data = []
-        for folder_name in os.listdir(self.data_folder):
-            folder_path = os.path.join(self.data_folder, folder_name)
-            if os.path.isdir(folder_path):
-                # 读取图像
-                image_paths = sorted([os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(('.jpg', '.png'))])
-                if len(image_paths) != 4:  # 每组图像四张
-                    continue
-
-                # 读取问题和答案
-                qa_path = os.path.join(folder_path, "qa.json")
-                with open(qa_path, "r") as f:
-                    qa_data = json.load(f)
-
-                for qa in qa_data['qa']:
-                    question = qa['question']
-                    answer = qa['answer']
-                    data.append((image_paths, question, answer))
-
-        return data
-
-    def __getitem__(self, idx):
-        image_paths, question, answer = self.data[idx]
-        # 处理图像特征
-        images = [Image.open(img_path) for img_path in image_paths]
-        inputs = self.feature_extractor(images=images, return_tensors="pt")
-        pixel_values = inputs.pixel_values.squeeze(0)  # [batch_size, seq_len, hidden_size]
-
-        # 处理问题文本
-        question_input = self.tokenizer(question, return_tensors="pt", padding=True, truncation=True, max_length=128)
-        input_ids = question_input.input_ids.squeeze(0)
-        attention_mask = question_input.attention_mask.squeeze(0)
-
-        # 处理答案文本
-        answer_input = self.tokenizer(answer, return_tensors="pt", padding=True, truncation=True, max_length=128)
-        target_ids = answer_input.input_ids.squeeze(0)
-
-        return {
-            'pixel_values': pixel_values,
-            'input_ids': input_ids,
-            'attention_mask': attention_mask,
-            'labels': target_ids
-        }
 
     def __len__(self):
-        return len(self.data)
+        return len(self.qa_data)
 
-# 3. 数据加载器
-data_folder = "/Users/jinxinye/Desktop/python/Project/MAPLM/baseline/evaluation/data/maplm_v0.1/train"  # 替换为数据目录
-dataset = ImageTextDataset(data_folder, t5_tokenizer, feature_extractor)
-dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+    def __getitem__(self, idx):
+        # 获取对应的问答数据
+        qa_entry = self.qa_data[idx]
+        frame = qa_entry["frame"]
+        question = qa_entry["question"]
+        answer = qa_entry["answer"]
 
-# 4. 训练模型
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-t5_model.to(device)
+        # 加载对应的图片
+        images = []
+        image_dir = os.path.join(self.image_folder, frame)
+        for img_file in sorted(os.listdir(image_dir)):  # 确保图片按顺序加载
+            if img_file.endswith((".jpg", ".png")):
+                img_path = os.path.join(image_dir, img_file)
+                images.append(Image.open(img_path).convert("RGB"))
 
+        # 提取图片特征
+        image_features = []
+        for image in images:
+            inputs = self.processor(images=image, return_tensors="pt").to(device)
+            with torch.no_grad():
+                outputs = blip_model.vision_model(**inputs)
+            image_features.append(outputs.last_hidden_state.mean(dim=1).squeeze(0))  # 全局特征
+
+        # 拼接图片特征
+        image_features = torch.cat(image_features, dim=0)
+
+        # 编码文本
+        input_ids = self.tokenizer.encode(question, return_tensors="pt", padding=True, truncation=True).squeeze(0)
+        target_ids = self.tokenizer.encode(answer, return_tensors="pt", padding=True, truncation=True).squeeze(0)
+
+        return image_features, input_ids, target_ids
+
+# 初始化数据集和数据加载器
+dataset = ImageTextDataset(image_folder, qa_data, blip_processor, tokenizer)
+dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+
+# 优化器和训练设置
 optimizer = torch.optim.AdamW(t5_model.parameters(), lr=5e-5)
+epochs = 5
 
 # 训练循环
-epochs = 3
 for epoch in range(epochs):
     t5_model.train()
-    total_loss = 0
-    for batch in tqdm(dataloader, desc=f"Training Epoch {epoch+1}"):
-        pixel_values = batch['pixel_values'].to(device)
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        labels = batch['labels'].to(device)
-
-        # ViT 特征提取
-        with torch.no_grad():
-            vit_outputs = vit_model(pixel_values=pixel_values)
-            image_features = vit_outputs.last_hidden_state.mean(dim=1)  # [batch_size, hidden_size]
-
-        # FLAN-T5 输入
-        input_ids = torch.cat([input_ids, image_features], dim=1)  # 结合图像和文字输入
-        attention_mask = torch.cat([attention_mask, torch.ones_like(image_features)], dim=1)
-
-        # 模型输出
-        outputs = t5_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss
-        total_loss += loss.item()
-
-        # 反向传播和优化
+    for batch_idx, (image_features, input_ids, target_ids) in enumerate(dataloader):
         optimizer.zero_grad()
+
+        # 模型输入
+        outputs = t5_model(
+            input_ids=input_ids.to(device),
+            attention_mask=(input_ids != tokenizer.pad_token_id).to(device),
+            labels=target_ids.to(device),
+        )
+        loss = outputs.loss
         loss.backward()
         optimizer.step()
 
-    print(f"Epoch {epoch+1}, Loss: {total_loss / len(dataloader)}")
+        # 打印进度
+        if batch_idx % 10 == 0:
+            print(f"Epoch [{epoch+1}/{epochs}], Batch [{batch_idx}/{len(dataloader)}], Loss: {loss.item():.4f}")
 
-# 5. 保存模型
-t5_model.save_pretrained("/path/to/save/your/model")
-t5_tokenizer.save_pretrained("/path/to/save/your/tokenizer")
+# 保存模型
+t5_model.save_pretrained(output_dir)
+tokenizer.save_pretrained(output_dir)
+
