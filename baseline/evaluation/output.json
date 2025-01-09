@@ -1,0 +1,127 @@
+import os
+import json
+import torch
+from torch.utils.data import Dataset, DataLoader
+from transformers import BlipForConditionalGeneration, BlipProcessor, AdamW
+
+# 数据集类
+class CustomDataset(Dataset):
+    def __init__(self, data_folder, qa_file, processor):
+        self.data_folder = data_folder
+        self.qa_data = self._load_qa_data(qa_file)
+        self.processor = processor
+
+    def _load_qa_data(self, qa_file):
+        with open(qa_file, 'r') as f:
+            return json.load(f)
+
+    def __len__(self):
+        return len(self.qa_data)
+
+    def __getitem__(self, idx):
+        entry = self.qa_data[idx]
+        frame = entry["frame"]
+        question = entry["question"]
+        answer = entry["answer"]
+
+        # 获取对应的图片路径
+        images = [os.path.join(self.data_folder, frame, img) for img in os.listdir(os.path.join(self.data_folder, frame))]
+        image_tensors = [self.processor.image_processor(image_path) for image_path in images]
+
+        # 合并图片特征
+        image_features = torch.stack(image_tensors)
+
+        return {
+            "image_features": image_features,
+            "question": question,
+            "answer": answer
+        }
+
+# 逐步加载模型权重
+def load_model_with_partial_weights(model_name="Salesforce/blip2-flan-t5-xl"):
+    # 初始化处理器和模型
+    processor = BlipProcessor.from_pretrained(model_name)
+    model = BlipForConditionalGeneration.from_pretrained(model_name, ignore_mismatched_sizes=True)
+
+    # 加载权重
+    pretrained_state_dict = torch.hub.load_state_dict_from_url(
+        f"https://huggingface.co/{model_name}/resolve/main/pytorch_model.bin",
+        map_location="cpu"
+    )
+
+    model_state_dict = model.state_dict()
+    for name, param in pretrained_state_dict.items():
+        if name in model_state_dict and model_state_dict[name].size() == param.size():
+            model_state_dict[name].copy_(param)  # 加载匹配的权重
+        else:
+            print(f"Skipping {name} due to size mismatch or absence in model structure.")
+
+    # 确保模型加载完成
+    model.load_state_dict(model_state_dict)
+    return processor, model
+
+# 定义训练过程
+def train_model(data_folder, qa_file, output_dir, model_name="Salesforce/blip2-flan-t5-xl", epochs=5, batch_size=4, learning_rate=1e-5):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # 加载处理器和模型
+    processor, model = load_model_with_partial_weights(model_name)
+    model.to(device)
+
+    # 初始化数据集和数据加载器
+    dataset = CustomDataset(data_folder, qa_file, processor)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    # 定义优化器
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+
+    # 开始训练
+    model.train()
+    for epoch in range(epochs):
+        for batch in dataloader:
+            image_features = batch["image_features"].to(device)
+            question = batch["question"]
+            answer = batch["answer"]
+
+            # 处理输入
+            inputs = processor(
+                text=question,
+                return_tensors="pt",
+                padding=True,
+                truncation=True
+            ).to(device)
+
+            labels = processor.tokenizer(
+                answer,
+                return_tensors="pt",
+                padding=True,
+                truncation=True
+            ).input_ids.to(device)
+
+            outputs = model(
+                pixel_values=image_features,
+                input_ids=inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                labels=labels
+            )
+
+            loss = outputs.loss
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+            print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
+
+    # 保存模型
+    os.makedirs(output_dir, exist_ok=True)
+    model.save_pretrained(output_dir)
+    processor.save_pretrained(output_dir)
+    print(f"Model saved to {output_dir}")
+
+# 主函数
+if __name__ == "__main__":
+    data_folder = "/path/to/train"  # 替换为图片文件夹路径
+    qa_file = "/path/to/qa.json"  # 替换为 QA 文件路径
+    output_dir = "/path/to/output"  # 替换为模型保存路径
+
+    train_model(data_folder, qa_file, output_dir)
