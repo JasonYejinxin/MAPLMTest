@@ -3,13 +3,15 @@ import json
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BlipForConditionalGeneration, BlipProcessor, AdamW
+import torch.nn.functional as F
 
 # 数据集类
 class CustomDataset(Dataset):
-    def __init__(self, data_folder, qa_file, processor):
+    def __init__(self, data_folder, qa_file, processor, device):
         self.data_folder = data_folder
         self.qa_data = self._load_qa_data(qa_file)
         self.processor = processor
+        self.device = device
 
     def _load_qa_data(self, qa_file):
         with open(qa_file, 'r') as f:
@@ -33,8 +35,9 @@ class CustomDataset(Dataset):
             image = self.processor.image_processor(img_path)
             image_features.append(image)
         
-        # 合并图片特征（假设需要合并成一张图片）
-        image_features = torch.stack(image_features)
+        # 合并图片特征：例如我们可以对4张图片的特征进行平均
+        image_features = torch.stack(image_features).to(self.device)  # 确保数据在正确的设备上
+        image_features = image_features.mean(dim=0)  # 取4张图像的特征均值作为该组的图像特征
 
         return {
             "image_features": image_features,
@@ -43,9 +46,10 @@ class CustomDataset(Dataset):
         }
 
 # 逐步加载模型权重
-def load_model_with_partial_weights(model_name="Salesforce/blip2-flan-t5-xl"):
+def load_model_with_partial_weights(model_name="Salesforce/blip2-flan-t5-xl", device="cuda"):
     processor = BlipProcessor.from_pretrained(model_name)
     model = BlipForConditionalGeneration.from_pretrained(model_name, ignore_mismatched_sizes=True)
+    model.to(device)  # 确保模型在正确的设备上
     return processor, model
 
 # 定义训练过程
@@ -53,11 +57,10 @@ def train_model(data_folder, qa_file, output_dir, model_name="Salesforce/blip2-f
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 加载处理器和模型
-    processor, model = load_model_with_partial_weights(model_name)
-    model.to(device)
-
+    processor, model = load_model_with_partial_weights(model_name, device)
+    
     # 初始化数据集和数据加载器
-    dataset = CustomDataset(data_folder, qa_file, processor)
+    dataset = CustomDataset(data_folder, qa_file, processor, device)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # 定义优化器
@@ -67,13 +70,13 @@ def train_model(data_folder, qa_file, output_dir, model_name="Salesforce/blip2-f
     model.train()
     for epoch in range(epochs):
         for batch in dataloader:
-            image_features = batch["image_features"].to(device)
+            image_features = batch["image_features"].to(device)  # 确保图片特征在正确的设备上
             question = batch["question"]
             answer = batch["answer"]
 
             # 处理输入文本
-            inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).to(device)
-            labels = processor.tokenizer(answer, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
+            inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).to(device)  # 确保文本数据在正确的设备上
+            labels = processor.tokenizer(answer, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)  # 同样要移到设备上
 
             outputs = model(
                 pixel_values=image_features,
