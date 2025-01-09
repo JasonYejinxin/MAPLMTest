@@ -25,11 +25,16 @@ class CustomDataset(Dataset):
         answer = entry["answer"]
 
         # 获取对应的图片路径
-        images = [os.path.join(self.data_folder, frame, img) for img in os.listdir(os.path.join(self.data_folder, frame))]
-        image_tensors = [self.processor.image_processor(image_path) for image_path in images]
+        image_paths = [os.path.join(self.data_folder, frame, img) for img in os.listdir(os.path.join(self.data_folder, frame))]
 
-        # 合并图片特征
-        image_features = torch.stack(image_tensors)
+        # 处理图片特征
+        image_features = []
+        for img_path in image_paths:
+            image = self.processor.image_processor(img_path)
+            image_features.append(image)
+        
+        # 合并图片特征（假设需要合并成一张图片）
+        image_features = torch.stack(image_features)
 
         return {
             "image_features": image_features,
@@ -39,25 +44,8 @@ class CustomDataset(Dataset):
 
 # 逐步加载模型权重
 def load_model_with_partial_weights(model_name="Salesforce/blip2-flan-t5-xl"):
-    # 初始化处理器和模型
     processor = BlipProcessor.from_pretrained(model_name)
     model = BlipForConditionalGeneration.from_pretrained(model_name, ignore_mismatched_sizes=True)
-
-    # 加载权重
-    pretrained_state_dict = torch.hub.load_state_dict_from_url(
-        f"https://huggingface.co/{model_name}/resolve/main/pytorch_model.bin",
-        map_location="cpu"
-    )
-
-    model_state_dict = model.state_dict()
-    for name, param in pretrained_state_dict.items():
-        if name in model_state_dict and model_state_dict[name].size() == param.size():
-            model_state_dict[name].copy_(param)  # 加载匹配的权重
-        else:
-            print(f"Skipping {name} due to size mismatch or absence in model structure.")
-
-    # 确保模型加载完成
-    model.load_state_dict(model_state_dict)
     return processor, model
 
 # 定义训练过程
@@ -83,20 +71,9 @@ def train_model(data_folder, qa_file, output_dir, model_name="Salesforce/blip2-f
             question = batch["question"]
             answer = batch["answer"]
 
-            # 处理输入
-            inputs = processor(
-                text=question,
-                return_tensors="pt",
-                padding=True,
-                truncation=True
-            ).to(device)
-
-            labels = processor.tokenizer(
-                answer,
-                return_tensors="pt",
-                padding=True,
-                truncation=True
-            ).input_ids.to(device)
+            # 处理输入文本
+            inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).to(device)
+            labels = processor.tokenizer(answer, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
 
             outputs = model(
                 pixel_values=image_features,
