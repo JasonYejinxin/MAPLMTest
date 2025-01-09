@@ -1,107 +1,88 @@
 import os
-import json
 import torch
-from torch.utils.data import Dataset, DataLoader
-from transformers import BlipForConditionalGeneration, BlipProcessor, AdamW
-import torch.nn.functional as F
+from transformers import BlipProcessor, BlipForConditionalGeneration
+from PIL import Image
+import json
+from torch.optim import AdamW
 
-# 数据集类
-class CustomDataset(Dataset):
-    def __init__(self, data_folder, qa_file, processor, device):
-        self.data_folder = data_folder
-        self.qa_data = self._load_qa_data(qa_file)
-        self.processor = processor
-        self.device = device
+# 初始化 BLIP 处理器和模型
+processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl").to("cuda")
 
-    def _load_qa_data(self, qa_file):
-        with open(qa_file, 'r') as f:
-            return json.load(f)
+# 设置优化器
+optimizer = AdamW(model.parameters(), lr=5e-5)
 
-    def __len__(self):
-        return len(self.qa_data)
+# 假设qa.json文件是存储在当前目录下
+qa_json_path = "/path/to/qa.json"  # 替换为你的qa.json文件路径
+with open(qa_json_path, 'r') as f:
+    qa_data = json.load(f)
 
-    def __getitem__(self, idx):
-        entry = self.qa_data[idx]
-        frame = entry["frame"]
-        question = entry["question"]
-        answer = entry["answer"]
+# 载入图像
+def load_images_from_frame(frame_id):
+    images = []
+    frame_path = os.path.join("/path/to/train", frame_id)  # 指定图片路径
+    for img_name in os.listdir(frame_path):
+        img_path = os.path.join(frame_path, img_name)
+        if img_path.endswith('.jpg') or img_path.endswith('.png'):
+            img = Image.open(img_path).convert("RGB")
+            images.append(img)
+    return images
 
-        # 获取对应的图片路径
-        image_paths = [os.path.join(self.data_folder, frame, img) for img in os.listdir(os.path.join(self.data_folder, frame))]
+# 处理图像和文本数据
+def process_multimodal_data(qa_data):
+    inputs = []
+    targets = []
 
-        # 处理图片特征
-        image_features = []
-        for img_path in image_paths:
-            image = self.processor.image_processor(img_path)
-            image_features.append(image)
+    for data in qa_data:
+        question = data["question"]
+        frame = data["frame"]
+        answer = data["answer"]
+
+        # 加载该 frame 下的四张图片
+        images = load_images_from_frame(frame)
         
-        # 合并图片特征：例如我们可以对4张图片的特征进行平均
-        image_features = torch.stack(image_features).to(self.device)  # 确保数据在正确的设备上
-        image_features = image_features.mean(dim=0)  # 取4张图像的特征均值作为该组的图像特征
+        # 提取图像特征
+        pixel_values = processor(images=images, return_tensors="pt").pixel_values.to("cuda")
+        
+        # 将问题转化为输入 ID
+        text_inputs = processor(text=question, return_tensors="pt").input_ids.to("cuda")
 
-        return {
-            "image_features": image_features,
-            "question": question,
-            "answer": answer
-        }
+        # 处理图像和文本的联合输入
+        outputs = model(input_ids=text_inputs, pixel_values=pixel_values)
 
-# 逐步加载模型权重
-def load_model_with_partial_weights(model_name="Salesforce/blip2-flan-t5-xl", device="cuda"):
-    processor = BlipProcessor.from_pretrained(model_name)
-    model = BlipForConditionalGeneration.from_pretrained(model_name, ignore_mismatched_sizes=True)
-    model.to(device)  # 确保模型在正确的设备上
-    return processor, model
+        # 处理模型输出，通常是生成答案
+        generated_answer = processor.decode(outputs.logits.argmax(dim=-1), skip_special_tokens=True)
+        
+        # 保存输入和目标
+        inputs.append(question)
+        targets.append(generated_answer)
 
-# 定义训练过程
-def train_model(data_folder, qa_file, output_dir, model_name="Salesforce/blip2-flan-t5-xl", epochs=5, batch_size=4, learning_rate=1e-5):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return inputs, targets
 
-    # 加载处理器和模型
-    processor, model = load_model_with_partial_weights(model_name, device)
-    
-    # 初始化数据集和数据加载器
-    dataset = CustomDataset(data_folder, qa_file, processor, device)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+# 训练模型时使用的输入和目标
+inputs, targets = process_multimodal_data(qa_data)
 
-    # 定义优化器
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
-
-    # 开始训练
+# 训练循环
+for epoch in range(5):  # 假设训练 5 个 epoch
     model.train()
-    for epoch in range(epochs):
-        for batch in dataloader:
-            image_features = batch["image_features"].to(device)  # 确保图片特征在正确的设备上
-            question = batch["question"]
-            answer = batch["answer"]
+    for i in range(len(inputs)):
+        input_ids = processor(inputs[i], return_tensors="pt").input_ids.to("cuda")
+        target_ids = processor(targets[i], return_tensors="pt").input_ids.to("cuda")
+        
+        # 向模型传递输入和目标
+        outputs = model(input_ids=input_ids, labels=target_ids)
+        
+        loss = outputs.loss
+        loss.backward()
 
-            # 处理输入文本
-            inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).to(device)  # 确保文本数据在正确的设备上
-            labels = processor.tokenizer(answer, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)  # 同样要移到设备上
+        # 更新权重
+        optimizer.step()
+        optimizer.zero_grad()
 
-            outputs = model(
-                pixel_values=image_features,
-                input_ids=inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                labels=labels
-            )
-
-            loss = outputs.loss
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-
-            print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
+    print(f"Epoch {epoch+1} completed. Loss: {loss.item()}")
 
     # 保存模型
-    os.makedirs(output_dir, exist_ok=True)
-    model.save_pretrained(output_dir)
-    processor.save_pretrained(output_dir)
-    print(f"Model saved to {output_dir}")
+    model.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
+    processor.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
 
-# 主函数
-if __name__ == "__main__":
-    data_folder = "/path/to/train"  # 替换为图片文件夹路径
-    qa_file = "/path/to/qa.json"  # 替换为 QA 文件路径
-    output_dir = "/path/to/output"  # 替换为模型保存路径
-
-    train_model(data_folder, qa_file, output_dir)
+    print(f"Model and processor saved for epoch {epoch+1}.")
