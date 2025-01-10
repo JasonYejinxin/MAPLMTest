@@ -115,127 +115,12 @@ if __name__ == "__main__":
     # print(json.dumps(results, indent=4, sort_keys=True))
 
 
-
-
-
-
-Traceback (most recent call last):
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 108, in <module>
-    train_model(qa_data)
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 87, in train_model
-    outputs = model(input_ids=input_ids, pixel_values=pixel_values, labels=target_ids)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 1109, in forward
-    vision_outputs = self.vision_model(
-                     ^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 724, in forward
-    hidden_states = self.embeddings(pixel_values, interpolate_pos_encoding=interpolate_pos_encoding)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 277, in forward
-    batch_size, _, height, width = pixel_values.shape
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-ValueError: too many values to unpack (expected 4)
-
-
-pixel shape:tensor([[[[[-1.0915, -1.0477, -1.0623,  ..., -1.2375, -1.1937, -1.1207],
-           [-1.1353, -1.0623, -0.9893,  ..., -1.2083, -1.1061, -1.0769],
-           [-1.1207, -1.0769, -1.0331,  ..., -1.1499, -1.1499, -1.1645],
-           ...,
-           [ 1.0982,  1.1420,  1.1858,  ...,  0.5727,  0.4997,  0.4559],
-           [ 1.2150,  1.2296,  1.2880,  ...,  0.8501,  0.8063,  0.7771],
-           [ 1.3464,  1.3756,  1.3610,  ...,  1.0252,  0.9814,  0.9814]],
-
-          [[-0.8366, -0.7916, -0.8066,  ..., -0.9867, -0.9867, -1.0317],
-           [-0.8816, -0.8066, -0.7316,  ..., -0.9717, -1.0467, -1.0467],
-           [-0.8666, -0.8216, -0.7766,  ..., -0.9717, -1.0167, -1.0017],
-           ...,
-           [ 1.2194,  1.2645,  1.3095,  ...,  0.6792,  0.6041,  0.5441],
-           [ 1.3395,  1.3545,  1.4145,  ...,  0.9643,  0.9193,  0.8893],
-           [ 1.4746,  1.5046,  1.4896,  ...,  1.1444,  1.0994,  1.0994]],
-
-          [[-0.4848, -0.4422, -0.4564,  ..., -0.5417, -0.6270, -0.6128],
-           [-0.5275, -0.4564, -0.3853,  ..., -0.3995, -0.5417, -0.5986],
-           [-0.5275, -0.4706, -0.4279,  ..., -0.3568, -0.5559, -0.5986],
-           ...,
-           [ 1.3354,  1.3922,  1.4207,  ...,  0.8234,  0.7523,  0.7097],
-           [ 1.4491,  1.4633,  1.5202,  ...,  1.0936,  1.0510,  1.0225],
-           [ 1.5771,  1.6055,  1.5913,  ...,  1.2643,  1.2216,  1.2216]]]]],
-       device='cuda:0'),input_ids shape:tensor([[ 363,  773,   13, 1373, 3112,   19,   34,   16,    8, 1383,   58,    1]],
-       device='cuda:0'),labels shape:tensor([[16612,   690,  1373,     5,     1]], device='cuda:0')
-
-
-
-
-# 测试 transformers, torch 和 PIL 模块
-try:
-    import transformers
-    print(f"transformers 模块成功导入，版本：{transformers.__version__}")
-except ImportError as e:
-    print("transformers 模块导入失败，请检查是否安装。\n错误信息：", e)
-
-try:
-    import torch
-    print(f"torch 模块成功导入，版本：{torch.__version__}")
-except ImportError as e:
-    print("torch 模块导入失败，请检查是否安装。\n错误信息：", e)
-
-try:
-    from PIL import Image
-    print("PIL 模块成功导入（Pillow 安装正常）")
-except ImportError as e:
-    print("PIL 模块导入失败，请检查是否安装 Pillow。\n错误信息：", e)
-
-# 额外测试：使用 torch 张量
-try:
-    x = torch.tensor([1.0, 2.0, 3.0])
-    print("torch 测试张量创建成功，内容为：", x)
-except Exception as e:
-    print("torch 测试张量创建失败。\n错误信息：", e)
-
-# 额外测试：transformers 模型（如 BertTokenizer）
-try:
-    from transformers import BertTokenizer
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    print("transformers 模块测试成功，BertTokenizer 已加载")
-except Exception as e:
-    print("transformers 模块测试失败。\n错误信息：", e)
-
-# 额外测试：PIL 打开一张空白图片
-try:
-    img = Image.new('RGB', (100, 100), color='red')
-    print("PIL 测试成功，已创建红色图片")
-except Exception as e:
-    print("PIL 测试失败。\n错误信息：", e)
-
-print(f"Error occurred: {e}")
-    print(f"input_ids shape: {input_ids.shape}")
-    print(f"pixel_values shape: {pixel_values.shape}")
-    print(f"labels shape: {target_ids.shape}")
-
-Error occurred: Input type (torch.cuda.FloatTensor) and weight type (torch.FloatTensor) should be the same
+Error occurred: Expected input batch_size (11) to match target batch_size (4).
 input_ids shape: torch.Size([1, 12])
 pixel_values shape: torch.Size([1, 3, 224, 224])
 labels shape: torch.Size([1, 5])
 Traceback (most recent call last):
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 89, in train_model
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 93, in train_model
     outputs = model(input_ids=input_ids, labels=target_ids, pixel_values=pixel_values)
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
@@ -244,47 +129,38 @@ Traceback (most recent call last):
   File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
     return forward_call(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 1109, in forward
-    vision_outputs = self.vision_model(
-                     ^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 1119, in forward
+    outputs = self.text_decoder(
+              ^^^^^^^^^^^^^^^^^^
   File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
     return self._call_impl(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
     return forward_call(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 724, in forward
-    hidden_states = self.embeddings(pixel_values, interpolate_pos_encoding=interpolate_pos_encoding)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip_text.py", line 906, in forward
+    lm_loss = loss_fct(shifted_prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
     return self._call_impl(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
     return forward_call(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 279, in forward
-    patch_embeds = self.patch_embedding(pixel_values.to(dtype=target_dtype))  # shape = [*, width, grid, grid]
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/loss.py", line 1293, in forward
+    return F.cross_entropy(
+           ^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/functional.py", line 3479, in cross_entropy
+    return torch._C._nn.cross_entropy_loss(
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/conv.py", line 554, in forward
-    return self._conv_forward(input, self.weight, self.bias)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/conv.py", line 549, in _conv_forward
-    return F.conv2d(
-           ^^^^^^^^^
-RuntimeError: Input type (torch.cuda.FloatTensor) and weight type (torch.FloatTensor) should be the same
+ValueError: Expected input batch_size (11) to match target batch_size (4).
 
 During handling of the above exception, another exception occurred:
 
 Traceback (most recent call last):
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 116, in <module>
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 120, in <module>
     train_model(qa_data)
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 97, in train_model
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/text.py", line 101, in train_model
     loss = outputs.loss
            ^^^^^^^
 UnboundLocalError: cannot access local variable 'outputs' where it is not associated with a value
