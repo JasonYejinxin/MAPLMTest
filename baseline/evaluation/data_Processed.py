@@ -829,3 +829,21 @@ UnboundLocalError: cannot access local variable 'outputs' where it is not associ
             pad_length = target_length - target_ids.size(1)
             padding = torch.full((target_ids.size(0), pad_length), processor.tokenizer.pad_token_id).to(device)
             target_ids = torch.cat((target_ids, padding), dim=1)
+
+
+
+
+
+
+
+# 获取问题的长度
+        target_length = text_inputs.size(1)  # 获取问题的长度
+        # 如果目标长度小于问题长度，进行填充
+        if target_ids.size(1) < target_length:
+            pad_length = target_length - target_ids.size(1)
+            # 创建一个pad序列（填充到目标的长度）
+            padding = torch.full((target_ids.size(0), pad_length), processor.tokenizer.pad_token_id).to(device)
+            target_ids = torch.cat((target_ids, padding), dim=1)
+        # 如果目标序列的长度大于问题长度，截断目标序列
+        elif target_ids.size(1) > target_length:
+            target_ids = target_ids[:, :target_length]
