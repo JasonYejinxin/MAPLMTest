@@ -290,7 +290,67 @@ UnboundLocalError: cannot access local variable 'outputs' where it is not associ
 
 
 
+# 将数据组织为一个 Dataset 对象
+class MultimodalDataset(Dataset):
+    def __init__(self, qa_data, processor):
+        self.qa_data = qa_data
+        self.processor = processor
+        self.inputs, self.targets = process_multimodal_data(self.qa_data)
 
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, idx):
+        input_ids, pixel_values = self.inputs[idx]
+        target_ids = self.targets[idx]
+        return input_ids, pixel_values, target_ids
+
+# 训练模型
+def train_model(qa_data, epochs=5, save_interval=1, batch_size=4):
+    # 通过 DataLoader 进行批量数据加载
+    dataset = MultimodalDataset(qa_data, processor)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    # 训练循环
+    for epoch in range(epochs):  # 假设训练 5 个 epoch
+        print(f"Round of training epoch {epoch + 1}")
+        model.train()
+        
+        for i, (input_ids, pixel_values, target_ids) in enumerate(dataloader):
+            input_ids = input_ids.to(device)
+            pixel_values = pixel_values.to(device)
+            target_ids = target_ids.to(device)
+            
+            try:
+                # 向模型传递输入和目标
+                outputs = model(input_ids=input_ids, labels=target_ids, pixel_values=pixel_values)
+                loss = outputs.loss
+                loss.backward()
+
+                # 更新权重
+                optimizer.step()
+                optimizer.zero_grad()
+
+                print(f"Batch {i + 1} - Loss: {loss.item()}")
+            except Exception as e:
+                print(f"Error occurred: {e}")
+                print(f"input_ids shape: {input_ids.shape}")
+                print(f"pixel_values shape: {pixel_values.shape}")
+                print(f"labels shape: {target_ids.shape}")
+                
+        print(f"Epoch {epoch + 1} completed. Loss: {loss.item()}")
+
+        # 每个 epoch 结束后保存模型和处理器
+        model_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}"
+        processor_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}"
+
+        model.save_pretrained(model_save_path)
+        processor.save_pretrained(processor_save_path)
+
+        print(f"Model and processor saved for epoch {epoch + 1} at {model_save_path}.")
+
+# 启动训练
+train_model(qa_data)
 
 
 
