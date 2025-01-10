@@ -817,3 +817,15 @@ Traceback (most recent call last):
            ^^^^^^^
 UnboundLocalError: cannot access local variable 'outputs' where it is not associated with a value
 
+
+
+
+
+# 确保 target_ids 长度与问题输入相同
+        target_length = text_inputs.size(1)  # 获取问题的长度
+        target_ids = target_ids[:, :target_length]  # 截断目标序列长度以匹配问题长度
+        if target_ids.size(1) < target_length:
+            # 如果目标长度小于问题长度，进行填充
+            pad_length = target_length - target_ids.size(1)
+            padding = torch.full((target_ids.size(0), pad_length), processor.tokenizer.pad_token_id).to(device)
+            target_ids = torch.cat((target_ids, padding), dim=1)
