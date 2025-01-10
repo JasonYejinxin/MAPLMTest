@@ -51,6 +51,21 @@ class QADataset(Dataset):
 
         return input_ids.squeeze(0), labels.squeeze(0), torch.cat(pixel_values_list, dim=0).squeeze(0)  # 去掉 batch dimension
 
+# collate_fn 函数，确保批次数据正确处理
+def collate_fn(batch):
+    # 过滤掉 None 数据
+    batch = list(filter(lambda x: x is not None, batch))
+    
+    # 解包批次数据
+    input_ids, labels, pixel_values = zip(*batch)
+    
+    # 将数据转换为适合批量处理的形式
+    input_ids = torch.stack(input_ids, dim=0)
+    labels = torch.stack(labels, dim=0)
+    pixel_values = torch.stack(pixel_values, dim=0)
+
+    return input_ids, labels, pixel_values
+
 # 初始化 BLIP 处理器和模型
 processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
 model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True)
@@ -64,7 +79,7 @@ frame_base_path = "/Users/jinxinye/Desktop/python/Project/MAPLM/baseline/evaluat
 
 # 创建数据集和 DataLoader
 dataset = QADataset(qa_data, frame_base_path, processor)
-dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=lambda x: list(filter(lambda x: x is not None, x)))  # 忽略 None 数据
+dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn)
 
 # 设置优化器
 optimizer = AdamW(model.parameters(), lr=5e-5)
@@ -73,10 +88,10 @@ optimizer = AdamW(model.parameters(), lr=5e-5)
 for epoch in range(5):  # 假设训练 5 个 epoch
     model.train()
     for batch in dataloader:
-        input_ids, labels, pixel_values = zip(*batch)
-        input_ids = torch.stack(input_ids).to("cuda")
-        labels = torch.stack(labels).to("cuda")
-        pixel_values = torch.stack(pixel_values).to("cuda")
+        input_ids, labels, pixel_values = batch
+        input_ids = input_ids.to("cuda")
+        labels = labels.to("cuda")
+        pixel_values = pixel_values.to("cuda")
 
         # 向模型传递输入和目标
         outputs = model(input_ids=input_ids, labels=labels, pixel_values=pixel_values)
