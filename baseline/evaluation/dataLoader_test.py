@@ -184,6 +184,46 @@ pixel shape:tensor([[[[[-1.0915, -1.0477, -1.0623,  ..., -1.2375, -1.1937, -1.12
 
 
 
+# 测试 transformers, torch 和 PIL 模块
+try:
+    import transformers
+    print(f"transformers 模块成功导入，版本：{transformers.__version__}")
+except ImportError as e:
+    print("transformers 模块导入失败，请检查是否安装。\n错误信息：", e)
+
+try:
+    import torch
+    print(f"torch 模块成功导入，版本：{torch.__version__}")
+except ImportError as e:
+    print("torch 模块导入失败，请检查是否安装。\n错误信息：", e)
+
+try:
+    from PIL import Image
+    print("PIL 模块成功导入（Pillow 安装正常）")
+except ImportError as e:
+    print("PIL 模块导入失败，请检查是否安装 Pillow。\n错误信息：", e)
+
+# 额外测试：使用 torch 张量
+try:
+    x = torch.tensor([1.0, 2.0, 3.0])
+    print("torch 测试张量创建成功，内容为：", x)
+except Exception as e:
+    print("torch 测试张量创建失败。\n错误信息：", e)
+
+# 额外测试：transformers 模型（如 BertTokenizer）
+try:
+    from transformers import BertTokenizer
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    print("transformers 模块测试成功，BertTokenizer 已加载")
+except Exception as e:
+    print("transformers 模块测试失败。\n错误信息：", e)
+
+# 额外测试：PIL 打开一张空白图片
+try:
+    img = Image.new('RGB', (100, 100), color='red')
+    print("PIL 测试成功，已创建红色图片")
+except Exception as e:
+    print("PIL 测试失败。\n错误信息：", e)
 
 
 
