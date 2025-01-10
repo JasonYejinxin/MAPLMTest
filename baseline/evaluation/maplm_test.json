@@ -49,15 +49,12 @@ def process_multimodal_data(qa_data):
         # 将问题转化为输入 ID
         text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
 
-        # 处理图像和文本的联合输入
-        outputs = model(input_ids=text_inputs, pixel_values=pixel_values)
+        # 将答案转化为目标 ID (作为监督学习的标签)
+        target_ids = processor(text=answer, return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
 
-        # 处理模型输出，通常是生成答案
-        generated_answer = processor.decode(outputs.logits.argmax(dim=-1), skip_special_tokens=True)
-        
         # 保存输入和目标
-        inputs.append(question)
-        targets.append(generated_answer)
+        inputs.append(text_inputs)
+        targets.append(target_ids)
 
     return inputs, targets
 
@@ -69,8 +66,8 @@ def train_model(qa_data, epochs=5):
     for epoch in range(epochs):  # 假设训练 5 个 epoch
         model.train()
         for i in range(len(inputs)):
-            input_ids = processor(inputs[i], return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
-            target_ids = processor(targets[i], return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
+            input_ids = inputs[i]
+            target_ids = targets[i]
             
             # 向模型传递输入和目标
             outputs = model(input_ids=input_ids, labels=target_ids)
