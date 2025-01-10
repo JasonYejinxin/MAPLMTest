@@ -225,6 +225,9 @@ try:
 except Exception as e:
     print("PIL 测试失败。\n错误信息：", e)
 
-
+print(f"Error occurred: {e}")
+    print(f"input_ids shape: {input_ids.shape}")
+    print(f"pixel_values shape: {pixel_values.shape}")
+    print(f"labels shape: {target_ids.shape}")
 
 
