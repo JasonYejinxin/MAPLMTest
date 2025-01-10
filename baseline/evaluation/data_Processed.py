@@ -407,12 +407,131 @@ RuntimeError: stack expects each tensor to be equal size, but got [1, 5] at entr
 
 
 
+import os
+import torch
+from transformers import BlipProcessor, BlipForConditionalGeneration
+from PIL import Image
+import json
+from torch.optim import AdamW
+from torch.utils.data import Dataset, DataLoader
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# 初始化 BLIP 处理器和模型
+processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True)
+model = model.to(device)
 
-        
+# 设置优化器
+optimizer = AdamW(model.parameters(), lr=5e-5)
 
-        # 每个 epoch 结束后保存模型和处理器
+# 假设 qa.json 文件是存储在当前目录下
+qa_json_path = "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/qaTrain.json"  # 替换为你的路径
+with open(qa_json_path, 'r') as f:
+    qa_data = json.load(f)
+
+# 载入图像（每个 frame 文件夹只加载第一张图片）
+def load_images_from_frame(frame_id):
+    images = []
+    frame_path = os.path.join("/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train", frame_id)  # 指定图片路径
+
+    if not os.path.exists(frame_path):
+        print(f"Warning: Frame folder {frame_id} not found. Skipping this entry.")
+        return None
+
+    img_names = sorted(os.listdir(frame_path))  # 确保文件按顺序读取
+    for img_name in img_names[:1]:  # 只加载第一张图片
+        img_path = os.path.join(frame_path, img_name)
+        if img_path.endswith('.jpg') or img_path.endswith('.png'):
+            img = Image.open(img_path).convert("RGB")
+            images.append(img)
+    return images if images else None
+
+# 处理图像和文本数据
+def process_multimodal_data(qa_data, max_question_len=32, max_answer_len=16):
+    inputs = []
+    targets = []
+
+    for data in qa_data:
+        question = data["question"]
+        frame = data["frame"]
+        answer = data["answer"]
+
+        images = load_images_from_frame(frame)
+        if images is None:
+            continue
+
+        pixel_values = processor(images=images[0], return_tensors="pt").pixel_values
+        text_inputs = processor(
+            text=question,
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=max_question_len
+        ).input_ids
+        target_ids = processor(
+            text=answer,
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=max_answer_len
+        ).input_ids
+
+        inputs.append((text_inputs, pixel_values))
+        targets.append(target_ids)
+
+    return inputs, targets
+
+# 自定义 collate_fn 解决张量堆叠问题
+def collate_fn(batch):
+    input_ids, pixel_values, target_ids = zip(*batch)
+    input_ids = torch.cat(input_ids, dim=0)
+    pixel_values = torch.cat(pixel_values, dim=0)
+    target_ids = torch.cat(target_ids, dim=0)
+    return input_ids, pixel_values, target_ids
+
+# 构造 Dataset 类
+class MultimodalDataset(Dataset):
+    def __init__(self, qa_data, processor):
+        self.inputs, self.targets = process_multimodal_data(qa_data)
+
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, idx):
+        return self.inputs[idx][0], self.inputs[idx][1], self.targets[idx]
+
+# 训练模型
+def train_model(qa_data, epochs=5, save_interval=1, batch_size=4):
+    dataset = MultimodalDataset(qa_data, processor)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+
+    for epoch in range(epochs):
+        print(f"Round of training epoch {epoch + 1}")
+        model.train()
+
+        for i, (input_ids, pixel_values, target_ids) in enumerate(dataloader):
+            input_ids = input_ids.to(device)
+            pixel_values = pixel_values.to(device)
+            target_ids = target_ids.to(device)
+
+            try:
+                outputs = model(input_ids=input_ids, labels=target_ids, pixel_values=pixel_values)
+                loss = outputs.loss
+                loss.backward()
+
+                optimizer.step()
+                optimizer.zero_grad()
+
+                print(f"Batch {i + 1} - Loss: {loss.item()}")
+            except Exception as e:
+                print(f"Error occurred: {e}")
+                print(f"input_ids shape: {input_ids.shape}")
+                print(f"pixel_values shape: {pixel_values.shape}")
+                print(f"labels shape: {target_ids.shape}")
+
+        print(f"Epoch {epoch + 1} completed.")
+
         model_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}"
         processor_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}"
 
@@ -423,7 +542,6 @@ RuntimeError: stack expects each tensor to be equal size, but got [1, 5] at entr
 
 # 启动训练
 train_model(qa_data)
-
 
 
 
