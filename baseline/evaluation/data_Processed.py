@@ -340,6 +340,78 @@ def train_model(qa_data, epochs=5, save_interval=1, batch_size=4):
                 
         print(f"Epoch {epoch + 1} completed. Loss: {loss.item()}")
 
+
+
+
+rror occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Error occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Error occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Error occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Error occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Error occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Error occurred: too many values to unpack (expected 4)
+input_ids shape: torch.Size([4, 1, 12])
+pixel_values shape: torch.Size([4, 1, 3, 224, 224])
+labels shape: torch.Size([4, 1, 5])
+Traceback (most recent call last):
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/1image_dataProcessed.py", line 138, in <module>
+    train_model(qa_data)
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/1image_dataProcessed.py", line 104, in train_model
+    for i, (input_ids, pixel_values, target_ids) in enumerate(dataloader):
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 701, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 757, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/_utils/fetch.py", line 55, in fetch
+    return self.collate_fn(data)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/_utils/collate.py", line 398, in default_collate
+    return collate(batch, collate_fn_map=default_collate_fn_map)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/_utils/collate.py", line 212, in collate
+    collate(samples, collate_fn_map=collate_fn_map)
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/_utils/collate.py", line 155, in collate
+    return collate_fn_map[elem_type](batch, collate_fn_map=collate_fn_map)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/utils/data/_utils/collate.py", line 272, in collate_tensor_fn
+    return torch.stack(batch, 0, out=out)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: stack expects each tensor to be equal size, but got [1, 5] at entry 0 and [1, 8] at entry 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
         # 每个 epoch 结束后保存模型和处理器
         model_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}"
         processor_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}"
