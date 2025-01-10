@@ -1,117 +1,97 @@
 import os
-import json
-from PIL import Image
 import torch
+from transformers import BlipProcessor, BlipForConditionalGeneration
+from PIL import Image
+import json
+from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader
-from transformers import (
-    BlipForConditionalGeneration,
-    BlipProcessor,
-    AutoTokenizer,
-    T5ForConditionalGeneration,
-    AdamW,
-)
 
-# 路径设置
-image_folder = "./train"  # 图片的主文件夹路径
-qa_json_path = "./qa.json"  # QA 数据的路径
-model_save_path = "./flan_t5_xl_multimodal.pth"  # 模型保存路径
-
-# 加载模型和处理器
-blip_processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl")
-t5_tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-xl")
-t5_model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-xl")
-
-# 配置参数
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-batch_size = 4
-epochs = 5
-
-# 定义数据集
-class MultimodalDataset(Dataset):
-    def __init__(self, image_folder, qa_json_path, processor, tokenizer):
-        self.image_folder = image_folder
+# 自定义 Dataset 类
+class QADataset(Dataset):
+    def __init__(self, qa_data, frame_base_path, processor):
+        self.qa_data = qa_data
+        self.frame_base_path = frame_base_path
         self.processor = processor
-        self.tokenizer = tokenizer
-        
-        # 加载QA数据
-        with open(qa_json_path, "r") as f:
-            self.qa_data = json.load(f)
 
     def __len__(self):
         return len(self.qa_data)
 
+    def load_images_from_frame(self, frame_id):
+        images = []
+        frame_path = os.path.join(self.frame_base_path, frame_id)  # 指定图片路径
+        if not os.path.exists(frame_path):
+            print(f"Warning: Folder {frame_id} not found. Skipping this frame.")
+            return None  # 如果文件夹不存在，返回 None
+        for img_name in os.listdir(frame_path):
+            img_path = os.path.join(frame_path, img_name)
+            if img_path.endswith('.jpg') or img_path.endswith('.png'):
+                img = Image.open(img_path).convert("RGB")
+                images.append(img)
+        return images
+
     def __getitem__(self, idx):
-        qa_entry = self.qa_data[idx]
-        frame = qa_entry["frame"]
-        question = qa_entry["question"]
-        answer = qa_entry["answer"]
+        data = self.qa_data[idx]
+        question = data["question"]
+        answer = data["answer"]
+        frame_id = data["frame"]
 
-        # 加载该 frame 中的所有图像
-        frame_folder = os.path.join(self.image_folder, frame)
-        image_paths = sorted(
-            [os.path.join(frame_folder, img) for img in os.listdir(frame_folder) if img.endswith((".jpg", ".png"))]
-        )
-        images = [Image.open(img_path).convert("RGB") for img_path in image_paths]
+        # 加载该 frame 下的图片
+        images = self.load_images_from_frame(frame_id)
+        if images is None:
+            return None
 
-        # 提取图像特征
-        inputs = self.processor(images=images, return_tensors="pt", padding=True).to(device)
-        with torch.no_grad():
-            vision_outputs = blip_model.vision_model(**inputs)
-        image_features = vision_outputs.last_hidden_state.mean(dim=1)
+        # 图像和文本数据处理
+        pixel_values_list = []
+        for img in images:
+            pixel_values = self.processor(images=img, return_tensors="pt").pixel_values
+            pixel_values_list.append(pixel_values)
 
-        # 处理文本数据
-        text_inputs = self.tokenizer(
-            question,
-            return_tensors="pt",
-            padding="max_length",
-            max_length=128,
-            truncation=True,
-        ).to(device)
-        labels = self.tokenizer(
-            answer,
-            return_tensors="pt",
-            padding="max_length",
-            max_length=128,
-            truncation=True,
-        ).input_ids.to(device)
+        input_ids = self.processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids
+        labels = self.processor(text=answer, return_tensors="pt", padding=True, truncation=True).input_ids
 
-        return image_features, text_inputs.input_ids, text_inputs.attention_mask, labels
+        return input_ids.squeeze(0), labels.squeeze(0), torch.cat(pixel_values_list, dim=0).squeeze(0)  # 去掉 batch dimension
 
+# 初始化 BLIP 处理器和模型
+processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True)
+
+# 加载 QA 数据
+qa_json_path = "/path/to/qa.json"  # 替换为你的qa.json文件路径
+with open(qa_json_path, 'r') as f:
+    qa_data = json.load(f)
+
+frame_base_path = "/Users/jinxinye/Desktop/python/Project/MAPLM/baseline/evaluation/data/maplm_v0.1/train"
 
 # 创建数据集和 DataLoader
-dataset = MultimodalDataset(image_folder, qa_json_path, blip_processor, t5_tokenizer)
-data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataset = QADataset(qa_data, frame_base_path, processor)
+dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=lambda x: list(filter(lambda x: x is not None, x)))  # 忽略 None 数据
 
-# 定义优化器
-optimizer = AdamW(t5_model.parameters(), lr=5e-5)
+# 设置优化器
+optimizer = AdamW(model.parameters(), lr=5e-5)
 
-# 模型训练
-t5_model.to(device)
-t5_model.train()
+# 训练循环
+for epoch in range(5):  # 假设训练 5 个 epoch
+    model.train()
+    for batch in dataloader:
+        input_ids, labels, pixel_values = zip(*batch)
+        input_ids = torch.stack(input_ids).to("cuda")
+        labels = torch.stack(labels).to("cuda")
+        pixel_values = torch.stack(pixel_values).to("cuda")
 
-for epoch in range(epochs):
-    total_loss = 0
-    for image_features, input_ids, attention_mask, labels in data_loader:
-        # 将图像特征拼接到文本前面
-        encoder_inputs = torch.cat([image_features, input_ids], dim=1)
+        # 向模型传递输入和目标
+        outputs = model(input_ids=input_ids, labels=labels, pixel_values=pixel_values)
 
-        # 前向传播
-        outputs = t5_model(
-            input_ids=encoder_inputs,
-            attention_mask=attention_mask,
-            labels=labels,
-        )
         loss = outputs.loss
-        total_loss += loss.item()
-
-        # 反向传播和优化
         loss.backward()
+
+        # 更新权重
         optimizer.step()
         optimizer.zero_grad()
 
-    print(f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss / len(data_loader)}")
+    print(f"Epoch {epoch+1} completed. Loss: {loss.item()}")
 
-# 保存模型
-torch.save(t5_model.state_dict(), model_save_path)
-print(f"Model saved to {model_save_path}")
+    # 保存模型
+    model.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
+    processor.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
+
+    print(f"Model and processor saved for epoch {epoch+1}.")
