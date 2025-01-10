@@ -1123,7 +1123,13 @@ train_model(qa_data)
 
 
 
-
+Traceback (most recent call last):
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/test.py", line 134, in <module>
+    train_model(qa_data)
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/test.py", line 122, in train_model
+    print(f"Epoch {epoch+1} completed. Loss: {loss.item()}")
+                                              ^^^^
+UnboundLocalError: cannot access local variable 'loss' where it is not associated with a value
 
 
 
