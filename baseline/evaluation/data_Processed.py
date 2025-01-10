@@ -110,3 +110,76 @@ for epoch in range(5):  # 假设训练 5 个 epoch
     processor.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
 
     print(f"Model and processor saved for epoch {epoch+1}.")
+
+
+
+
+
+
+
+
+round of traning epochs is number0
+Error occurred: Expected input batch_size (11) to match target batch_size (4).
+input_ids shape: torch.Size([1, 12])
+pixel_values shape: torch.Size([1, 3, 224, 224])
+labels shape: torch.Size([1, 5])
+Traceback (most recent call last):
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/1image_dataProcessed.py", line 94, in train_model
+    outputs = model(input_ids=input_ids, labels=target_ids, pixel_values=pixel_values)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip.py", line 1119, in forward
+    outputs = self.text_decoder(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/transformers/models/blip/modeling_blip_text.py", line 906, in forward
+    lm_loss = loss_fct(shifted_prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/modules/loss.py", line 1293, in forward
+    return F.cross_entropy(
+           ^^^^^^^^^^^^^^^^
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/nn/functional.py", line 3479, in cross_entropy
+    return torch._C._nn.cross_entropy_loss(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: Expected input batch_size (11) to match target batch_size (4).
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/1image_dataProcessed.py", line 121, in <module>
+    train_model(qa_data)
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/1image_dataProcessed.py", line 102, in train_model
+    loss = outputs.loss
+           ^^^^^^^
+UnboundLocalError: cannot access local variable 'outputs' where it is not associated with a value
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
