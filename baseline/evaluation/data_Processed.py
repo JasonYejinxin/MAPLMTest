@@ -663,7 +663,22 @@ train_model(qa_data)
 
 
 
-
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+round of traning epochs is number 0
+/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train/FR8537/photo_forward.jpg
+/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train/FR3354/photo_forward.jpg
+/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train/FR6113/photo_forward.jpg
+/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train/FR3624/photo_forward.jpg
+Error occurred: Expected input batch_size (44) to match target batch_size (16).
+input_ids shape: torch.Size([4, 12])
+pixel_values shape: torch.Size([4, 3, 224, 224])
+labels shape: torch.Size([4, 5])
+Traceback (most recent call last):
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/oneImageTest.py", line 117, in <module>
+    train_model(qa_data)
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/oneImageTest.py", line 98, in train_model
+    loss = outputs.loss
+           ^^^^^^^
 
 
 
