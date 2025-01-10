@@ -4,85 +4,110 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
 import json
 from torch.optim import AdamW
+from torch.utils.data import DataLoader, Dataset
 
-# 初始化 BLIP 处理器和模型
+# 初始化处理器和模型
 processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl").to("cuda")
+model = BlipForConditionalGeneration.from_pretrained(
+    "Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True
+).to("cuda")
 
 # 设置优化器
 optimizer = AdamW(model.parameters(), lr=5e-5)
 
-# 假设qa.json文件是存储在当前目录下
-qa_json_path = "/path/to/qa.json"  # 替换为你的qa.json文件路径
-with open(qa_json_path, 'r') as f:
+# 路径设置
+qa_json_path = "/path/to/qa.json"  # 替换为你的 qa.json 文件路径
+frame_base_path = "/path/to/frames/"  # 替换为你的图像根目录路径
+
+# 加载 JSON 数据
+with open(qa_json_path, "r") as f:
     qa_data = json.load(f)
 
-# 载入图像
-def load_images_from_frame(frame_id):
-    images = []
-    frame_path = os.path.join("/path/to/train", frame_id)  # 指定图片路径
-    for img_name in os.listdir(frame_path):
-        img_path = os.path.join(frame_path, img_name)
-        if img_path.endswith('.jpg') or img_path.endswith('.png'):
-            img = Image.open(img_path).convert("RGB")
-            images.append(img)
-    return images
 
-# 处理图像和文本数据
-def process_multimodal_data(qa_data):
-    inputs = []
-    targets = []
+# 自定义数据集
+class QADataset(Dataset):
+    def __init__(self, qa_data, frame_base_path):
+        self.qa_data = qa_data
+        self.frame_base_path = frame_base_path
 
-    for data in qa_data:
+    def __len__(self):
+        return len(self.qa_data)
+
+    def __getitem__(self, idx):
+        data = self.qa_data[idx]
         question = data["question"]
-        frame = data["frame"]
         answer = data["answer"]
+        frame_id = data["frame"]
 
-        # 加载该 frame 下的四张图片
-        images = load_images_from_frame(frame)
-        
-        # 提取图像特征
-        pixel_values = processor(images=images, return_tensors="pt").pixel_values.to("cuda")
-        
-        # 将问题转化为输入 ID
-        text_inputs = processor(text=question, return_tensors="pt").input_ids.to("cuda")
+        # 加载该 frame 下的所有图片
+        images = self.load_images_from_frame(frame_id)
 
-        # 处理图像和文本的联合输入
-        outputs = model(input_ids=text_inputs, pixel_values=pixel_values)
+        return question, answer, images
 
-        # 处理模型输出，通常是生成答案
-        generated_answer = processor.decode(outputs.logits.argmax(dim=-1), skip_special_tokens=True)
-        
-        # 保存输入和目标
-        inputs.append(question)
-        targets.append(generated_answer)
+    def load_images_from_frame(self, frame_id):
+        images = []
+        frame_path = os.path.join(self.frame_base_path, frame_id)
+        for img_name in os.listdir(frame_path):
+            img_path = os.path.join(frame_path, img_name)
+            if img_path.endswith((".jpg", ".png")):
+                try:
+                    img = Image.open(img_path).convert("RGB")
+                    images.append(img)
+                except Exception as e:
+                    print(f"Error loading image {img_path}: {e}")
+        return images
 
-    return inputs, targets
 
-# 训练模型时使用的输入和目标
-inputs, targets = process_multimodal_data(qa_data)
+# 定义数据加载器
+def collate_fn(batch):
+    questions, answers, images_list = zip(*batch)
+
+    # 将每组的多张图片进行处理，合并到一个批次
+    batched_pixel_values = []
+    for images in images_list:
+        pixel_values = processor(images=images, return_tensors="pt", padding=True).pixel_values
+        batched_pixel_values.append(pixel_values)
+
+    # 合并图像维度
+    batched_pixel_values = torch.cat(batched_pixel_values, dim=0)
+
+    # 文本处理
+    input_ids = processor(list(questions), return_tensors="pt", padding=True, truncation=True).input_ids
+    labels = processor(list(answers), return_tensors="pt", padding=True, truncation=True).input_ids
+
+    return input_ids, labels, batched_pixel_values
+
+
+dataset = QADataset(qa_data, frame_base_path)
+dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn)
+
 
 # 训练循环
-for epoch in range(5):  # 假设训练 5 个 epoch
+num_epochs = 5
+for epoch in range(num_epochs):
     model.train()
-    for i in range(len(inputs)):
-        input_ids = processor(inputs[i], return_tensors="pt").input_ids.to("cuda")
-        target_ids = processor(targets[i], return_tensors="pt").input_ids.to("cuda")
-        
-        # 向模型传递输入和目标
-        outputs = model(input_ids=input_ids, labels=target_ids)
-        
-        loss = outputs.loss
-        loss.backward()
+    total_loss = 0
 
-        # 更新权重
+    for batch in dataloader:
+        input_ids, labels, pixel_values = batch
+
+        input_ids = input_ids.to("cuda")
+        labels = labels.to("cuda")
+        pixel_values = pixel_values.to("cuda")
+
+        # 模型前向计算
+        outputs = model(input_ids=input_ids, labels=labels, pixel_values=pixel_values)
+        loss = outputs.loss
+        total_loss += loss.item()
+
+        # 反向传播和优化
+        loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-    print(f"Epoch {epoch+1} completed. Loss: {loss.item()}")
+    print(f"Epoch {epoch+1}/{num_epochs} completed. Total Loss: {total_loss:.4f}")
 
     # 保存模型
     model.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
     processor.save_pretrained(f"./blip2_flan_t5_epoch_{epoch+1}")
-
     print(f"Model and processor saved for epoch {epoch+1}.")
