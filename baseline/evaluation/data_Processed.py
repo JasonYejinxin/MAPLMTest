@@ -804,5 +804,16 @@ def train_model(qa_data, epochs=5, batch_size=4, save_interval=1):
 
 # 启动训练
 train_model(qa_data)
-
+Batch 0 - input_ids shape: torch.Size([4, 12]), pixel_values shape: torch.Size([4, 3, 224, 224]), target_ids shape: torch.Size([4, 5])
+Error occurred: Expected input batch_size (44) to match target batch_size (16).
+input_ids shape: torch.Size([4, 12])
+pixel_values shape: torch.Size([4, 3, 224, 224])
+labels shape: torch.Size([4, 5])
+Traceback (most recent call last):
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/oneImageTest.py", line 124, in <module>
+    train_model(qa_data)
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/oneImageTest.py", line 105, in train_model
+    loss = outputs.loss
+           ^^^^^^^
+UnboundLocalError: cannot access local variable 'outputs' where it is not associated with a value
 
