@@ -1,39 +1,70 @@
-from transformers import CLIPProcessor, CLIPModel
+import os
+import torch
+from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+import json
 
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-image = Image.open("photo_forward.jpg")
+# 初始化 BLIP 处理器和模型
+processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True)
 
-# text = ['number of lane in this image is 0', 'number of lane in this image is 1', 'number of lane in this image is 2', 'number of lane in this image is 3']
-text = ['lane', 'pear', 'apple', 'flower']
-# text = ['0 lane', '1 lanes', '2 lanes', '3 lanes']
+model = model.to(device)
 
+# 假设qa.json文件是存储在当前目录下
+qa_json_path = "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/qaTrain.json"  # 替换为你的qa.json文件路径
+with open(qa_json_path, 'r') as f:
+    qa_data = json.load(f)
 
-inputs = processor(text= text, images=image, return_tensors='pt', padding = True)
+# 载入图像（每个frame文件夹只加载第一张图片）
+def load_images_from_frame(frame_id):
+    images = []
+    frame_path = os.path.join("/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train", frame_id)  # 指定图片路径
 
-outputs = model(**inputs)
-logits_per_image = outputs.logits_per_image
-probs = logits_per_image.softmax(dim = 1)
+    # 检查文件夹是否存在
+    if not os.path.exists(frame_path):
+        print(f"Warning: Frame folder {frame_id} not found. Skipping this entry.")
+        return None  # 返回None，表示该frame没有对应的图片
 
-for i in range(len(text)):
-    print(text[i], ':',probs[0][i])
+    img_names = sorted(os.listdir(frame_path))  # 确保文件按顺序读取
+    for img_name in img_names[:1]:  # 只加载第一张图片
+        img_path = os.path.join(frame_path, img_name)
+        print(img_path)
+        if img_path.endswith('.jpg') or img_path.endswith('.png'):
+            img = Image.open(img_path).convert("RGB")
+            images.append(img)
+    return images if images else None  # 如果没有图片，返回None
 
-# #伪代码
-# #1. 提取单模态特征，image->I_i, text->T_i
-# I_f = image_encoder(image) #(n,d_i)  a row
-# T_f = text_encoder(text)  #(n,d_t)  a row
+# 测试模型
+def test_model(qa_data):
+    model.eval()  # 设置模型为评估模式
+    for data in qa_data:
+        question = data["question"]
+        frame = data["frame"]
 
-# #2  两个特征过多模态embadding，提取多模态特征, 同时对两个多模态特征做layer norm
-# I_e = l2_normalize(np.dot(I_f,W_i),axis=1) #[n,d_i]*[d_i,d_e] = [n,d_e]
-# T_e = l2_normalize(np.dot(T_f,W_t),axis=1) #[n,d_t]*[d_t,d_e] = [n,d_e]
+        # 加载图像
+        images = load_images_from_frame(frame)
+        
+        if images is None:
+            continue
+        
+        # 提取图像特征
+        pixel_values = processor(images=images[0], return_tensors="pt").pixel_values.to(device)
+        
+        # 将问题转化为输入 ID
+        text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
 
-# #3 计算图片，文字向量的余弦相似度
-# logits = np.dot(I_e,T_e.T) * np.exp(t) # [n,n]
+        # 使用模型生成回答
+        with torch.no_grad():  # 不需要计算梯度
+            outputs = model.generate(input_ids=text_inputs, pixel_values=pixel_values)
 
-# #4.计算loss
-# labels = np.arange(n)
-# loss_i = cross_entropy_loss(logits, labels, axis=0)
-# loss_t = cross_entropy_loss(logits, labels, axis=1)
-# loss = (loss_i + loss_t)/2 
+        # 解码生成的答案
+        generated_answer = processor.decode(outputs[0], skip_special_tokens=True)
+        
+        # 输出问题和模型生成的答案
+        print(f"Question: {question}")
+        print(f"Generated Answer: {generated_answer}")
+
+# 启动模型测试
+test_model(qa_data)
