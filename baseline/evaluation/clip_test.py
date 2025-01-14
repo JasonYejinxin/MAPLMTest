@@ -4,67 +4,57 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
 import json
 
+# 设置设备为cuda或者cpu
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# 初始化 BLIP 处理器和模型
-processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True)
+# 加载保存的模型和处理器
+model_path = "./blip2_flan_t5_epoch_5"  # 保存模型的路径
+processor = BlipProcessor.from_pretrained(model_path)
+model = BlipForConditionalGeneration.from_pretrained(model_path)
 
+# 将模型移至指定设备（GPU或CPU）
 model = model.to(device)
 
-# 假设qa.json文件是存储在当前目录下
-qa_json_path = "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/qaTrain.json"  # 替换为你的qa.json文件路径
-with open(qa_json_path, 'r') as f:
-    qa_data = json.load(f)
+# 测试图片路径
+test_image_path = "/path/to/test_image.jpg"  # 替换为你的测试图像路径
 
-# 载入图像（每个frame文件夹只加载第一张图片）
-def load_images_from_frame(frame_id):
-    images = []
-    frame_path = os.path.join("/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train", frame_id)  # 指定图片路径
+# 测试问题
+test_question = "What is the color of the sky?"  # 替换为你想测试的问题
 
-    # 检查文件夹是否存在
-    if not os.path.exists(frame_path):
-        print(f"Warning: Frame folder {frame_id} not found. Skipping this entry.")
-        return None  # 返回None，表示该frame没有对应的图片
+# 载入图像
+def load_image(image_path):
+    try:
+        img = Image.open(image_path).convert("RGB")
+        return img
+    except Exception as e:
+        print(f"Error loading image: {e}")
+        return None
 
-    img_names = sorted(os.listdir(frame_path))  # 确保文件按顺序读取
-    for img_name in img_names[:1]:  # 只加载第一张图片
-        img_path = os.path.join(frame_path, img_name)
-        print(img_path)
-        if img_path.endswith('.jpg') or img_path.endswith('.png'):
-            img = Image.open(img_path).convert("RGB")
-            images.append(img)
-    return images if images else None  # 如果没有图片，返回None
+# 处理图像和文本数据
+def test_image_qa(model, processor, image_path, question):
+    # 载入图像
+    image = load_image(image_path)
+    if image is None:
+        print("No image found. Exiting.")
+        return
+
+    # 提取图像特征
+    pixel_values = processor(images=image, return_tensors="pt").pixel_values.to(device)
+
+    # 将问题转化为输入 ID
+    text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
+
+    # 使用模型进行推理
+    with torch.no_grad():
+        outputs = model(input_ids=text_inputs, pixel_values=pixel_values)
+    
+    # 从输出中获取生成的答案
+    generated_answer = processor.decode(outputs.logits.argmax(dim=-1), skip_special_tokens=True)
+
+    return generated_answer
 
 # 测试模型
-def test_model(qa_data):
-    model.eval()  # 设置模型为评估模式
-    for data in qa_data:
-        question = data["question"]
-        frame = data["frame"]
+generated_answer = test_image_qa(model, processor, test_image_path, test_question)
 
-        # 加载图像
-        images = load_images_from_frame(frame)
-        
-        if images is None:
-            continue
-        
-        # 提取图像特征
-        pixel_values = processor(images=images[0], return_tensors="pt").pixel_values.to(device)
-        
-        # 将问题转化为输入 ID
-        text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
-
-        # 使用模型生成回答
-        with torch.no_grad():  # 不需要计算梯度
-            outputs = model.generate(input_ids=text_inputs, pixel_values=pixel_values)
-
-        # 解码生成的答案
-        generated_answer = processor.decode(outputs[0], skip_special_tokens=True)
-        
-        # 输出问题和模型生成的答案
-        print(f"Question: {question}")
-        print(f"Generated Answer: {generated_answer}")
-
-# 启动模型测试
-test_model(qa_data)
+print(f"Question: {test_question}")
+print(f"Generated Answer: {generated_answer}")
