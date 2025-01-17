@@ -71,12 +71,17 @@ def generate_answer(test_dir, question, feature_method="concatenate"):
         # 处理问题
         text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
 
-        # 模型生成答案
+        # 推理：先做前向推理获取 logits
         with torch.no_grad():
-            outputs = model.generate(input_ids=text_inputs, pixel_values=pixel_values, max_length=50)
-            answer = processor.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            # 获取模型的输出 logits
+            outputs = model(input_ids=text_inputs, pixel_values=pixel_values)
+            logits = outputs.logits
+            
+            # 从 logits 中选择生成的答案
+            predicted_ids = logits.argmax(dim=-1)  # 选出最大值的 index
+            answer = processor.tokenizer.decode(predicted_ids[0], skip_special_tokens=True)
 
-        # 将答案与对应的帧名称存储
+        # 保存答案
         answers[frame_names[i]] = answer
 
     return answers
