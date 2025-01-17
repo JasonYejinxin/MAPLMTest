@@ -1,17 +1,14 @@
-Error occurred: Given groups=1, weight of size [768, 3, 16, 16], expected input[1, 12, 224, 224] to have 3 channels, but got 12 channels instead
-input_ids shape: torch.Size([1, 9])
-pixel_values shape: torch.Size([1, 12, 224, 224])
-labels shape: torch.Size([1, 9])
-Error occurred: Given groups=1, weight of size [768, 3, 16, 16], expected input[1, 12, 224, 224] to have 3 channels, but got 12 channels instead
-input_ids shape: torch.Size([1, 19])
-pixel_values shape: torch.Size([1, 12, 224, 224])
-labels shape: torch.Size([1, 19])
-Epoch1 completed, but loss was not coumputed
 Traceback (most recent call last):
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data_processed_concat.py", line 145, in <module>
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data_processed_concat.py", line 146, in <module>
     train_model(qa_data, feature_method="concatenate")  # 或者改为 "concatenate"
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data_processed_concat.py", line 135, in train_model
-    print(f"Epoch {epoch + 1} completed. Loss: {loss.item()}")
-                                                ^^^^^^^^^
-AttributeError: 'NoneType' object has no attribute 'item'
+  File "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data_processed_concat.py", line 127, in train_model
+    loss.backward()
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/_tensor.py", line 581, in backward
+    torch.autograd.backward(
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/autograd/__init__.py", line 347, in backward
+    _engine_run_backward(
+  File "/home/airlab/anaconda3/lib/python3.12/site-packages/torch/autograd/graph.py", line 825, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Trying to backward through the graph a second time (or directly access saved tensors after they have already been freed). Saved intermediate values of the graph are freed when you call .backward() or autograd.grad(). Specify retain_graph=True if you need to backward through the graph a second time or if you need to access saved tensors after calling backward.
