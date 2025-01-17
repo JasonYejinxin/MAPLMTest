@@ -59,8 +59,8 @@ def generate_answer(frame_path, question, feature_method="concatenate"):
 
 # 示例推理
 if __name__ == "__main__":
-    frame_path = "/path/to/test_frame_folder"  # 替换为测试帧的文件夹路径
-    question = "What is happening in the image?"  # 替换为你想问的问题
+    frame_path = "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/test"  # 替换为测试帧的文件夹路径
+    question = "How many lanes in current road?"  # 替换为你想问的问题
 
     try:
         answer = generate_answer(frame_path, question)
@@ -68,3 +68,10 @@ if __name__ == "__main__":
         print(f"Answer: {answer}")
     except Exception as e:
         print(f"Error occurred during inference: {e}")
+
+
+Error occurred during inference: No valid images found in /home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/test.
+
+
+
+
