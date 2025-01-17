@@ -90,4 +90,4 @@ Error occurred during inference: No valid images found in /home/airlab/Desktop/J
         raise ValueError(f"No valid images found in {test_dir}.")
     return images
 
-
+Error occurred during inference: Given groups=1, weight of size [768, 3, 16, 16], expected input[1, 18000, 224, 224] to have 3 channels, but got 18000 channels instead
