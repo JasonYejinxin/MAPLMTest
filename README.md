@@ -2,145 +2,69 @@ import os
 import torch
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
-import json
-from torch.optim import AdamW
-import torch.nn as nn
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# 初始化 BLIP 处理器和模型
-processor = BlipProcessor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl", ignore_mismatched_sizes=True)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 加载训练好的模型和处理器
+model_path = "./blip2_flan_t5_epoch_5_concatenate"  # 替换为保存的模型路径
+processor = BlipProcessor.from_pretrained(model_path)
+model = BlipForConditionalGeneration.from_pretrained(model_path)
 model = model.to(device)
+model.eval()
 
-# 设置优化器
-optimizer = AdamW(filter(lambda p:p.requires_grad, model.parameters()), lr=5e-5)
-
-# 加载 qa.json 数据
-qa_json_path = "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/qaTrain_3Q_balanced.json"  # 替换为你的qa.json路径
-with open(qa_json_path, 'r') as f:
-    qa_data = json.load(f)
-
-# 加载图片 (frame 文件夹下所有图片)
-def load_images_from_frame(frame_id):
+# 加载图片 (推理时加载单帧图像)
+def load_images_for_inference(frame_path):
     images = []
-    frame_path = os.path.join("/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/train", frame_id)
-
     if not os.path.exists(frame_path):
-        print(f"Warning: Frame folder {frame_id} not found. Skipping this entry.")
-        return None
-
+        raise FileNotFoundError(f"Frame folder {frame_path} not found.")
     img_names = sorted(os.listdir(frame_path))  # 确保文件按顺序读取
     for img_name in img_names[:4]:  # 加载最多 4 张图片
         img_path = os.path.join(frame_path, img_name)
-        if img_path.endswith('.jpg') or img_path.endswith('.png'):
+        if img_path.endswith(".jpg") or img_path.endswith(".png"):
             img = Image.open(img_path).convert("RGB")
             images.append(img)
-    return images if images else None
+    if not images:
+        raise ValueError(f"No valid images found in {frame_path}.")
+    return images
 
-# 特征聚合 (平均池化)
-def aggregate_image_features(images):
-    pixel_values = []
-    for img in images:
-        inputs = processor(images=img, return_tensors="pt").pixel_values.to(device)
-        pixel_values.append(inputs.to(device))
-    pixel_values = torch.cat(pixel_values, dim=0)  # [4, 3, H, W]
-    return pixel_values.mean(dim=0, keepdim=True)  # [1, 3, H, W]
-channel_reduction = nn.Conv2d(in_channels = 12, out_channels = 3, kernel_size = 1).to(device)
-# 特征拼接
+# 特征拼接（与训练保持一致）
 def concatenate_image_features(images):
     pixel_values = []
     for img in images:
         inputs = processor(images=img, return_tensors="pt").pixel_values.to(device)
         pixel_values.append(inputs.to(device))
-    pixel_values = torch.cat(pixel_values,dim=1)
-    reduced = channel_reduction(pixel_values)
-    return reduced # [1, 3, H, W]
+    pixel_values = torch.cat(pixel_values, dim=1)  # [1, 12, H, W]
+    return pixel_values
 
-# 处理多模态数据
-def process_multimodal_data(qa_data, feature_method="aggregate"):
-    inputs = []
-    targets = []
+# 推理函数
+def generate_answer(frame_path, question, feature_method="concatenate"):
+    # 加载图片
+    images = load_images_for_inference(frame_path)
 
-    for data in qa_data:
-        frame = data["frame"]
-        qa_list = data["QA"]
+    # 特征处理
+    if feature_method == "concatenate":
+        pixel_values = concatenate_image_features(images)
+    else:
+        raise ValueError("Only 'concatenate' feature method is supported in this inference code.")
 
-        # 加载 frame 文件夹中的图片
-        images = load_images_from_frame(frame)
-        if images is None:
-            continue
+    # 处理问题
+    text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
 
-        # 根据指定方法处理图片特征
-        if feature_method == "aggregate":
-            pixel_values = aggregate_image_features(images)  # 平均池化
-        elif feature_method == "concatenate":
-            pixel_values = concatenate_image_features(images)  # 拼接特征
-        else:
-            raise ValueError("Invalid feature method. Use 'aggregate' or 'concatenate'.")
+    # 模型生成答案
+    with torch.no_grad():
+        outputs = model.generate(input_ids=text_inputs, pixel_values=pixel_values, max_length=50)
+        answer = processor.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        for qa in qa_list:
-            question = qa["question"]
-            answer = qa["answer"]
+    return answer
 
-            # 处理问题和答案
-            text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
-            target_ids = processor(text=answer, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
+# 示例推理
+if __name__ == "__main__":
+    frame_path = "/path/to/test_frame_folder"  # 替换为测试帧的文件夹路径
+    question = "What is happening in the image?"  # 替换为你想问的问题
 
-            # 对齐问题和答案的长度
-            target_length = text_inputs.size(1)
-            if target_ids.size(1) < target_length:
-                pad_length = target_length - target_ids.size(1)
-                padding = torch.full((target_ids.size(0), pad_length), processor.tokenizer.pad_token_id).to(device)
-                target_ids = torch.cat((target_ids, padding), dim=1)
-
-            inputs.append((text_inputs, pixel_values))
-            targets.append(target_ids)
-
-    return inputs, targets
-
-# 训练模型
-def train_model(qa_data, epochs=5, feature_method="concatenate"):
-    inputs, targets = process_multimodal_data(qa_data, feature_method)
-
-    for epoch in range(epochs):
-        print(f"Starting epoch {epoch + 1}/{epochs}")
-        model.train()
-
-        loss = None
-
-        for i in range(len(inputs)):
-            input_ids, pixel_values = inputs[i]
-            target_ids = targets[i]
-
-            try:
-                outputs = model(input_ids=input_ids, labels=target_ids, pixel_values=pixel_values)
-                loss = outputs.loss
-           
-            except Exception as e:
-                print(f"Error occurred: {e}")
-                print(f"input_ids shape: {input_ids.shape}")
-                print(f"pixel_values shape: {pixel_values.shape}")
-                print(f"labels shape: {target_ids.shape}")
-                continue
-
-            if loss is not None:
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-        if loss is not None:
-            print(f"Epoch {epoch + 1} completed. Loss:{loss.item()}")
-        else:
-            print(f"Epoch{epoch + 1} completed, but loss was not coumputed")
-           
-
-        print(f"Epoch {epoch + 1} completed. Loss: {loss.item()}")
-
-        # 保存模型和处理器
-        model_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}_{feature_method}"
-        processor_save_path = f"./blip2_flan_t5_epoch_{epoch + 1}_{feature_method}"
-        model.save_pretrained(model_save_path)
-        processor.save_pretrained(processor_save_path)
-        print(f"Model and processor saved at {model_save_path}")
-
-# 启动训练 (指定特征处理方法：'aggregate' 或 'concatenate')
-train_model(qa_data, feature_method="concatenate")  # 或者改为 "concatenate"
+    try:
+        answer = generate_answer(frame_path, question)
+        print(f"Question: {question}")
+        print(f"Answer: {answer}")
+    except Exception as e:
+        print(f"Error occurred during inference: {e}")
