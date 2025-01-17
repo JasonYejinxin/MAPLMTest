@@ -60,4 +60,36 @@ def generate_answer(test_dir, question, feature_method="concatenate"):
     images, frame_names = load_images_for_inference(test_dir)
 
     answers = {}
-    # 对每
+    # 对每一组图片进行推理
+    for i, frame_images in enumerate(images):
+        # 特征处理
+        if feature_method == "concatenate":
+            pixel_values = concatenate_image_features(frame_images)
+        else:
+            raise ValueError("Only 'concatenate' feature method is supported in this inference code.")
+
+        # 处理问题
+        text_inputs = processor(text=question, return_tensors="pt", padding=True, truncation=True).input_ids.to(device)
+
+        # 模型生成答案
+        with torch.no_grad():
+            outputs = model.generate(input_ids=text_inputs, pixel_values=pixel_values, max_length=50)
+            answer = processor.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # 将答案与对应的帧名称存储
+        answers[frame_names[i]] = answer
+
+    return answers
+
+# 示例推理
+if __name__ == "__main__":
+    test_dir = "/home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/test"
+    question = "How many lanes in current road?"  # 替换为你想问的问题
+
+    try:
+        answers = generate_answer(test_dir, question)
+        for frame_name, answer in answers.items():
+            print(f"Frame: {frame_name}")
+            print(f"Answer: {answer}")
+    except Exception as e:
+        print(f"Error occurred during inference: {e}")
