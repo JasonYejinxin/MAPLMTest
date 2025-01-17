@@ -72,6 +72,22 @@ if __name__ == "__main__":
 
 Error occurred during inference: No valid images found in /home/airlab/Desktop/Jingwen/MAPLMTest/baseline/evaluation/data/maplm_v0.1/test.
 
-
+# 遍历所有的子文件夹（fr1, fr2 等）
+    subfolders = sorted(os.listdir(test_dir))
+    for folder in subfolders:
+        folder_path = os.path.join(test_dir, folder)
+        if os.path.isdir(folder_path):  # 确保是子文件夹
+            img_names = sorted(os.listdir(folder_path))  # 按照文件名排序
+            for img_name in img_names[:4]:  # 加载最多4张图片
+                img_path = os.path.join(folder_path, img_name)
+                if img_path.endswith(".jpg") or img_path.endswith(".png"):  # 只加载jpg/png图片
+                    try:
+                        img = Image.open(img_path).convert("RGB")
+                        images.append(img)
+                    except Exception as e:
+                        print(f"Failed to open image {img_path}: {e}")
+    if not images:
+        raise ValueError(f"No valid images found in {test_dir}.")
+    return images
 
 
